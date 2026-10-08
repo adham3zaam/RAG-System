@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>AI PDF Assistant</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+</head>
+
+
+<body>
+
+    <div class="container">
+
+        <h1>AI PDF Assistant</h1>
+
+        <p class="subtitle">
+            Upload a PDF and ask questions about it.
+        </p>
+
+
+        <!-- ========================= -->
+        <!-- Upload PDF -->
+        <!-- ========================= -->
+
+        <section class="card">
+
+            <h2>Upload PDF</h2>
+
+            <input
+                type="file"
+                id="pdfFile"
+                accept=".pdf"
+            >
+
+            <button
+                id="uploadButton"
+                type="button"
+            >
+                Upload PDF
+            </button>
+
+            <p id="uploadStatus"></p>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- Ask Question -->
+        <!-- ========================= -->
+
+        <section class="card">
+
+            <h2>Ask a Question</h2>
+
+            <textarea
+                id="question"
+                placeholder="Ask something about the PDF..."
+            ></textarea>
+
+            <button
+                id="askButton"
+                type="button"
+            >
+                Ask Question
+            </button>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- Answer -->
+        <!-- ========================= -->
+
+        <section class="card">
+
+            <h2>Answer</h2>
+
+            <div id="answer">
+                No answer yet.
+            </div>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- Sources -->
+        <!-- ========================= -->
+
+        <section class="card">
+
+            <h2>Sources</h2>
+
+            <div id="sources">
+                No sources yet.
+            </div>
+
+        </section>
+
+    </div>
+
+
+    <!-- JavaScript -->
+
+    <script
+        src="{{ url_for('static', filename='script.js') }}"
+    ></script>
+
+</body>
+
+</html>
