@@ -22,14 +22,15 @@ You are a question rewriting assistant.
 Rewrite the user's question to make it clearer
 and more suitable for semantic search in a PDF document.
 
-Do not answer the question.
-
-Only return the rewritten question.
+Rules:
+- Keep the exact meaning of the original question.
+- Do not answer the question.
+- Do not add information.
+- Return only the rewritten question.
 
 User question:
 {question}
 """)
-
 
 rewrite_chain = rewrite_prompt | llm | StrOutputParser()
 
@@ -39,27 +40,32 @@ rewrite_chain = rewrite_prompt | llm | StrOutputParser()
 # ==============================
 
 answer_prompt = ChatPromptTemplate.from_template("""
-You are a helpful assistant answering questions based only
-on the provided context from a PDF document.
+You are a document question-answering assistant.
 
-Rules:
+Your job is to answer the user's question using ONLY
+the information inside the CONTEXT below.
 
-- Use only the provided context.
-- Do not invent or guess information.
-- If the answer is not available in the context, say:
-  "I don't have enough information in the document."
-- Answer clearly and concisely.
-- Mention the page number when possible.
+IMPORTANT RULES:
 
-Context:
+1. The CONTEXT is the source of truth.
+2. If the answer exists anywhere in the CONTEXT, you MUST answer it.
+3. Do NOT say that you don't have enough information if the answer
+   is present in the CONTEXT.
+4. Do NOT use outside knowledge.
+5. Do NOT invent information.
+6. Answer in the same language as the user's question.
+7. Give a clear and concise answer.
+8. When possible, mention the page number shown in the context.
 
+CONTEXT:
+==============================
 {context}
+==============================
 
-Question:
-
+USER QUESTION:
 {question}
 
-Answer:
+Now answer the user's question using the CONTEXT.
 """)
 
 
@@ -78,8 +84,10 @@ def format_docs(docs):
 
         page = doc.metadata.get("page", 0) + 1
 
+        content = doc.page_content.strip()
+
         formatted.append(
-            f"[Page {page}]\n{doc.page_content}"
+            f"[Page {page}]\n{content}"
         )
 
     return "\n\n".join(formatted)
@@ -121,41 +129,110 @@ def sequential_rag(question):
 
     retriever = get_retriever()
 
-    rewritten_question = rewrite_chain.invoke({
-        "question": question
-    })
+    # ==========================================
+    # 1. Original Question
+    # ==========================================
 
-    docs = retriever.invoke(
-        rewritten_question
-    )
+    original_question = question.strip()
+
+    print("\n==============================")
+    print("ORIGINAL QUESTION")
+    print("==============================")
+    print(original_question)
+
+    # ==========================================
+    # 2. Rewrite Question
+    # ==========================================
+
+    rewritten_question = rewrite_chain.invoke({
+        "question": original_question
+    }).strip()
+
+    print("\n==============================")
+    print("REWRITTEN QUESTION")
+    print("==============================")
+    print(rewritten_question)
+
+    # ==========================================
+    # 3. Retrieve using ORIGINAL question
+    # ==========================================
+    #
+    # IMPORTANT:
+    # We use the original question for retrieval
+    # because our previous test showed that it
+    # retrieves the correct tourism chunk.
+    #
+
+    docs = retriever.invoke(original_question)
+
+    print("\n==============================")
+    print("RETRIEVED DOCUMENTS")
+    print("==============================")
+    print("Number of documents:", len(docs))
+
+    for i, doc in enumerate(docs, start=1):
+
+        print(f"\n--- DOCUMENT {i} ---")
+
+        page = doc.metadata.get("page")
+
+        if page is not None:
+            print("Page:", page + 1)
+        else:
+            print("Page: Unknown")
+
+        print(
+            "Source:",
+            doc.metadata.get("source", "unknown")
+        )
+
+        print("Content:")
+        print(doc.page_content[:1500])
+
+    # ==========================================
+    # 4. Format context
+    # ==========================================
 
     context = format_docs(docs)
 
+    print("\n==============================")
+    print("RETRIEVED CONTEXT")
+    print("==============================")
+    print(context)
+    print("==============================")
+
+    # ==========================================
+    # 5. Generate Answer
+    # ==========================================
+
     answer = answer_chain.invoke({
         "context": context,
-        "question": question
+        "question": original_question
     })
+
+    print("\n==============================")
+    print("FINAL ANSWER")
+    print("==============================")
+    print(answer)
+
+    # ==========================================
+    # 6. Sources
+    # ==========================================
 
     sources = get_sources(docs)
 
-    return {
-        "original_question": question,
-        "rewritten_question": rewritten_question,
-        "answer": answer,
-        "sources": sources
-    }
+    print("\n==============================")
+    print("SOURCES")
+    print("==============================")
+    print(sources)
 
-
-    # Step 6:
-    # Return everything
+    # ==========================================
+    # 7. Return result
+    # ==========================================
 
     return {
-
-        "original_question": question,
-
+        "original_question": original_question,
         "rewritten_question": rewritten_question,
-
         "answer": answer,
-
         "sources": sources
     }
