@@ -1,123 +1,173 @@
+
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <title>AI PDF Assistant</title>
+    <title>DocuMind AI | Study Assistant</title>
 
     <link
         rel="stylesheet"
         href="{{ url_for('static', filename='style.css') }}"
     >
-
 </head>
 
-
 <body>
+    <header class="topbar">
+        <a class="brand" href="/">
+            <span class="brand-icon">D</span>
+            <span>DocuMind <span class="brand-accent">AI</span></span>
+        </a>
 
-    <div class="container">
+        <span class="header-label">AI STUDY ASSISTANT</span>
+    </header>
 
-        <h1>AI PDF Assistant</h1>
+    <main class="container">
+        <section class="hero">
+            <span class="eyebrow">YOUR PERSONAL STUDY PARTNER</span>
+            <h1>Study smarter with <span>AI.</span></h1>
+            <p>
+                Upload your lecture, generate a study summary and important
+                questions, then ask anything about your document.
+            </p>
+        </section>
 
-        <p class="subtitle">
-            Upload a PDF and ask questions about it.
-        </p>
+        <section class="card upload-card">
+            <div class="section-heading">
+                <div class="heading-icon">01</div>
+                <div>
+                    <h2>Upload your lecture</h2>
+                    <p>Choose a PDF document to get started.</p>
+                </div>
+            </div>
 
-
-        <!-- ========================= -->
-        <!-- Upload PDF -->
-        <!-- ========================= -->
-
-        <section class="card">
-
-            <h2>Upload PDF</h2>
+            <label class="file-picker" for="pdfFile">
+                <span class="upload-icon">↑</span>
+                <span class="file-picker-text">
+                    <strong>Choose a PDF document</strong>
+                    <small id="fileName">No file selected</small>
+                </span>
+                <span class="browse-label">Browse</span>
+            </label>
 
             <input
                 type="file"
                 id="pdfFile"
-                accept=".pdf"
+                accept=".pdf,application/pdf"
+                hidden
             >
 
-            <button
-                id="uploadButton"
-                type="button"
-            >
-                Upload PDF
+            <button id="uploadButton" class="button button-primary" type="button">
+                <span>Upload document</span>
             </button>
 
-            <p id="uploadStatus"></p>
-
+            <p id="uploadStatus" class="status-message" aria-live="polite"></p>
         </section>
 
+        <section class="card generate-card">
+            <div class="section-heading">
+                <div class="heading-icon">02</div>
+                <div>
+                    <h2>Generate study material</h2>
+                    <p>
+                        After the PDF is uploaded, generate a summary
+                        and exam-preparation questions.
+                    </p>
+                </div>
+            </div>
 
-        <!-- ========================= -->
-        <!-- Ask Question -->
-        <!-- ========================= -->
+            <button
+                id="generateButton"
+                class="button button-accent"
+                type="button"
+                disabled
+            >
+                <span>✦ Generate Summary &amp; Questions</span>
+            </button>
 
-        <section class="card">
+            <p
+                id="generateStatus"
+                class="status-message"
+                aria-live="polite"
+            ></p>
+        </section>
 
-            <h2>Ask a Question</h2>
+        <section class="card result-card" id="summarySection">
+            <div class="section-heading">
+                <div class="heading-icon">03</div>
+                <div>
+                    <h2>Study summary</h2>
+                    <p>Review the main concepts from your lecture.</p>
+                </div>
+            </div>
+
+            <div id="summary" class="result-content">
+                <p class="placeholder">
+                    Your summary will appear here after generation.
+                </p>
+            </div>
+        </section>
+
+        <section class="card result-card" id="questionsSection">
+            <div class="section-heading">
+                <div class="heading-icon">04</div>
+                <div>
+                    <h2>Important questions</h2>
+                    <p>Practice with questions and answers based on your PDF.</p>
+                </div>
+            </div>
+
+            <div id="questions" class="result-content">
+                <p class="placeholder">
+                    Your practice questions will appear here after generation.
+                </p>
+            </div>
+        </section>
+
+        <section class="card chat-card">
+            <div class="section-heading">
+                <div class="heading-icon">05</div>
+                <div>
+                    <h2>Ask your document</h2>
+                    <p>Ask follow-up questions about the uploaded lecture.</p>
+                </div>
+            </div>
+
+            <label for="question" class="field-label">Your question</label>
 
             <textarea
                 id="question"
-                placeholder="Ask something about the PDF..."
+                rows="4"
+                placeholder="For example: Explain the second concept in simple words..."
             ></textarea>
 
-            <button
-                id="askButton"
-                type="button"
-            >
-                Ask Question
+            <p class="input-hint">Tip: Press Ctrl + Enter to send.</p>
+
+            <button id="askButton" class="button button-primary" type="button">
+                <span>Ask question</span>
             </button>
 
-        </section>
-
-
-        <!-- ========================= -->
-        <!-- Answer -->
-        <!-- ========================= -->
-
-        <section class="card">
-
-            <h2>Answer</h2>
-
-            <div id="answer">
-                No answer yet.
+            <div class="answer-panel">
+                <h3>Answer</h3>
+                <div id="answer" class="result-content" aria-live="polite">
+                    <p class="placeholder">
+                        Your answer will appear here.
+                    </p>
+                </div>
             </div>
 
+            <details class="sources-details">
+                <summary>View answer sources</summary>
+                <pre id="sources">Sources will appear after your first question.</pre>
+            </details>
         </section>
 
+        <footer class="footer">
+            DocuMind AI · Learn, review, and understand your documents.
+        </footer>
+    </main>
 
-        <!-- ========================= -->
-        <!-- Sources -->
-        <!-- ========================= -->
-
-        <section class="card">
-
-            <h2>Sources</h2>
-
-            <div id="sources">
-                No sources yet.
-            </div>
-
-        </section>
-
-    </div>
-
-
-    <!-- JavaScript -->
-
-    <script
-        src="{{ url_for('static', filename='script.js') }}"
-    ></script>
-
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
-
 </html>
