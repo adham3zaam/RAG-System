@@ -1,14 +1,24 @@
-from langchain_groq import ChatGroq
 
+from functools import lru_cache
+
+from langchain_groq import ChatGroq
 from config.config import GROQ_API_KEY, LLM_MODEL
 
 
-def get_llm():
+@lru_cache(maxsize=1)
+def get_llm() -> ChatGroq:
+    if not GROQ_API_KEY:
+        raise ValueError(
+            "GROQ_API_KEY is missing from the .env file."
+        )
 
-    llm = ChatGroq(
+    if not LLM_MODEL:
+        raise ValueError(
+            "LLM_MODEL is missing from the .env file."
+        )
+
+    return ChatGroq(
         api_key=GROQ_API_KEY,
         model=LLM_MODEL,
-        temperature=0
+        temperature=0,
     )
-
-    return llm

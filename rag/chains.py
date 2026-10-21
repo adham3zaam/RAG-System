@@ -1,3 +1,6 @@
+# rag/chains.py
+
+import os
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -7,447 +10,550 @@ from rag.llm import get_llm
 from rag.retriever import get_retriever
 
 
-# ==========================================
-# LLM
-# ==========================================
+# =========================================================
+# 1. INITIALIZE LLM AND OUTPUT PARSER
+# =========================================================
 
 llm = get_llm()
 output_parser = StrOutputParser()
 
 
-# ==========================================
-# Question Rewrite Chain
-# ==========================================
+# =========================================================
+# 2. QUESTION REWRITING PROMPT
+# =========================================================
 
-rewrite_prompt = ChatPromptTemplate.from_template("""
-You are a question rewriting assistant.
+rewrite_prompt = ChatPromptTemplate.from_template(
+    """
+You are a question-rewriting assistant for a university lecture
+document question-answering system.
 
-Rewrite the user's question to make it clearer
-and more suitable for semantic search in a PDF document.
+Rewrite the student's question into a clear, specific search query
+that will help retrieve the most relevant information from the lecture.
 
 Rules:
-- Preserve the exact meaning of the original question.
+- Preserve the student's original meaning.
+- Keep important technical terms.
+- Use the conversation question as the main source of intent.
 - Do not answer the question.
-- Do not add information.
-- Return only the rewritten question.
+- Do not add facts that are not provided.
+- Return only the rewritten search query.
 
-User question:
+Student question:
 {question}
-""")
+"""
+)
 
 rewrite_chain = rewrite_prompt | llm | output_parser
 
 
-# ==========================================
-# Answer Chain - Existing RAG
-# ==========================================
+# =========================================================
+# 3. ANSWER PROMPT
+# =========================================================
 
-answer_prompt = ChatPromptTemplate.from_template("""
-You are an academic document question-answering assistant.
+answer_prompt = ChatPromptTemplate.from_template(
+    """
+You are DocuMind AI, a helpful university study assistant.
 
-Answer the user's question using ONLY the information
-inside the CONTEXT below.
+Answer the student's question using the lecture context provided below.
 
-Rules:
-1. The context is the source of truth.
-2. If the answer exists in the context, answer it clearly.
-3. Do not use outside knowledge.
-4. Do not invent information.
-5. Answer in the same language as the user's question.
-6. Explain academic concepts when the context supports it.
-7. Use examples from the document when relevant.
-8. Mention page numbers when available.
-9. If the answer is not supported by the context, clearly
-   say that the document does not provide enough information.
-10. Focus on the lecture content, not unrelated details.
-
-CONTEXT:
-==============================
+LECTURE CONTEXT:
 {context}
-==============================
 
-USER QUESTION:
+STUDENT QUESTION:
 {question}
 
-Answer using the context only.
-""")
+Instructions:
+1. Answer the actual question directly.
+2. Explain the relevant concepts clearly and in sufficient detail.
+3. Use examples when they are supported by the lecture.
+4. Preserve important definitions, technical terms, formulas, and steps.
+5. Organize long answers using headings or bullet points when useful.
+6. Do not invent information or claim that the lecture says something
+   that is not supported by the context.
+7. If the context does not contain enough information, clearly explain
+   that the answer cannot be determined from the available lecture.
+8. Do not answer unrelated questions using outside assumptions.
+
+Write a clear, educational answer.
+"""
+)
 
 answer_chain = answer_prompt | llm | output_parser
 
 
-# ==========================================
-# Summary Chain
-# ==========================================
+# =========================================================
+# 4. DETAILED SUMMARY PROMPT
+# =========================================================
 
-summary_prompt = ChatPromptTemplate.from_template("""
-You are an expert academic study assistant.
+summary_prompt = ChatPromptTemplate.from_template(
+    """
+You are an expert university teaching assistant.
 
-Create a clear and useful study summary based ONLY on
-the document content provided below.
+Your task is to create detailed study notes from ONE SECTION of a
+university lecture. The section may be part of a longer document.
 
-Requirements:
-- Write in the same language as the document.
-- Preserve important concepts, definitions, facts, dates,
-  formulas, steps, and examples.
-- Organize the summary using clear headings and bullet points.
-- Explain difficult ideas in simple language.
-- Explain relationships between concepts when supported.
-- Do not add facts that are not in the document.
-- Avoid unnecessary repetition.
-- Focus on academic content.
-- Exclude cover-page information and instructor names unless
-  they are academically relevant to the lecture.
-- Do not claim that the summary covers content that was
-  not included in the provided section.
+LECTURE SECTION:
+{context}
 
-DOCUMENT SECTION:
-{content}
+Write a comprehensive, accurate summary of the provided section.
 
-Write the study summary for this section.
-""")
+REQUIREMENTS:
+
+1. Cover the important information throughout the entire section,
+   not just its opening paragraphs.
+2. Explain the main ideas and concepts in clear language.
+3. Include important definitions, terminology, classifications,
+   properties, comparisons, and explanations.
+4. Preserve formulas, equations, algorithms, examples, and procedures
+   when they appear in the section.
+5. Explain relationships between concepts when the text supports them.
+6. Include important details that a student may need for an exam.
+7. Use descriptive headings and subheadings.
+8. Use bullet points for lists and numbered steps for procedures.
+9. Explain technical concepts rather than simply listing keywords.
+10. Do not add facts that are absent from the provided section.
+11. Do not summarize only the introduction or the first few paragraphs.
+12. Do not include unrelated information about the lecturer, document
+    administration, or file metadata unless academically relevant.
+13. If the section is short, summarize all its meaningful content.
+14. Return the actual summary, not an introduction about what you will do.
+15. Never return an empty response or a placeholder.
+
+Produce detailed notes that help a student understand and revise
+the material without needing to reread every sentence.
+"""
+)
 
 summary_chain = summary_prompt | llm | output_parser
 
 
-# ==========================================
-# Questions Chain
-# ==========================================
+# =========================================================
+# 5. IMPORTANT QUESTIONS PROMPT
+# =========================================================
 
-questions_prompt = ChatPromptTemplate.from_template("""
-You are an expert university exam-preparation assistant.
+questions_prompt = ChatPromptTemplate.from_template(
+    """
+You are an expert university instructor preparing exam revision
+questions from a lecture section.
 
-Your task is to create useful exam questions that test the
-student's understanding of the actual academic content.
+LECTURE SECTION:
+{context}
 
-LECTURE CONTENT:
-{content}
+Generate IMPORTANT STUDY QUESTIONS based on the academic content
+of this section.
 
-IMPORTANT RULES:
+COVERAGE REQUIREMENTS:
 
-1. Focus ONLY on educational and academic content.
-2. Ignore cover-page information, instructor names, professor
-   names, university names, student names, and administrative
-   details.
-3. Do not ask who prepared or presented the lecture.
-4. Focus on the important concepts, definitions, explanations,
-   methods, steps, formulas, examples, comparisons, advantages,
-   disadvantages, and relationships discussed in the lecture.
-5. Generate 5 to 8 meaningful questions for this section
-   when the content supports that number.
-6. Include a useful mixture of:
-   - Definition questions.
-   - Explain and understand questions.
-   - Compare and contrast questions.
-   - How and why questions.
-   - Application questions based on lecture examples.
-   - Multiple-choice questions with four options (A, B, C, D).
-   - Questions about steps, methods, or processes.
-7. Include the correct answer for every question.
-8. For multiple-choice questions, identify the correct option
-   and explain the answer when the content supports it.
-9. Use the same language as the lecture content.
-10. Every question must test a meaningful learning objective.
-11. Avoid duplicate questions and irrelevant minor details.
-12. Never invent facts, concepts, options, or answers.
-13. If a section contains little academic content, generate
-    only questions that are supported by that section.
-14. Return multiple questions when the content supports them.
-    Do not return just one example.
-15. Do not create questions merely to reach a target number.
+1. Examine the entire section, including its beginning, middle,
+   and end.
+2. Focus on concepts, definitions, explanations, mechanisms,
+   classifications, comparisons, examples, formulas, and procedures.
+3. Do not focus on the lecturer's name, document title, course
+   administration, or other unimportant personal details.
+4. Avoid asking multiple questions that test exactly the same idea.
+5. Do not ask questions whose answers are unrelated to the lecture.
+6. Make the questions useful for understanding and exam preparation.
+7. Generate approximately 8-12 questions for a substantial section.
+   For a short section, generate fewer questions if appropriate.
+8. Include a mixture of:
+   - Definition and concept questions
+   - Explanation and understanding questions
+   - Comparison questions, when applicable
+   - Application or problem-solving questions, when supported
+   - Questions about important steps, properties, or relationships
+9. Do not invent concepts that do not appear in the section.
+10. Every question must be based on the actual lecture content.
+11. Include a concise, accurate answer below each question.
+12. If the section contains formulas, procedures, or examples,
+    include questions about them where relevant.
 
-OUTPUT FORMAT:
+Use this format:
 
-Question 1: [Question]
-Answer: [Correct answer]
+## Question 1: [Question]
 
-Question 2: [Question]
-Answer: [Correct answer]
+**Answer:** [Answer based on the lecture]
 
-For multiple-choice questions:
+## Question 2: [Question]
 
-Question: [Question]
-A) [Option]
-B) [Option]
-C) [Option]
-D) [Option]
-Correct answer: [Letter and answer]
-Explanation: [Explanation supported by the lecture]
+**Answer:** [Answer based on the lecture]
 
-Generate the questions now.
-""")
+Continue numbering the questions.
+
+Return only the questions and their answers.
+Do not return a generic introduction or a conclusion.
+"""
+)
 
 questions_chain = questions_prompt | llm | output_parser
 
 
-# ==========================================
-# Format Retrieved Documents
-# ==========================================
+# =========================================================
+# 6. DOCUMENT HELPER FUNCTIONS
+# =========================================================
 
 def format_docs(docs):
-    formatted = []
+    """
+    Convert retrieved LangChain documents into one context string.
+    Include page information when available.
+    """
+    formatted_docs = []
 
     for doc in docs:
-        page_value = doc.metadata.get("page")
-        page = (
-            page_value + 1
-            if isinstance(page_value, int)
-            else "Unknown"
-        )
-
         content = doc.page_content.strip()
 
-        formatted.append(f"[Page {page}]\n{content}")
+        if not content:
+            continue
 
-    return "\n\n".join(formatted)
+        page = doc.metadata.get("page")
 
+        if page is not None:
+            try:
+                page_label = int(page) + 1
+            except (TypeError, ValueError):
+                page_label = page
 
-# ==========================================
-# Get Sources
-# ==========================================
+            formatted_docs.append(
+                f"[Page {page_label}]\n{content}"
+            )
+        else:
+            formatted_docs.append(content)
+
+    return "\n\n---\n\n".join(formatted_docs)
+
 
 def get_sources(docs):
+    """
+    Return unique source/page references for the frontend.
+    """
     sources = []
+    seen = set()
 
     for doc in docs:
-        page_value = doc.metadata.get("page")
+        source = doc.metadata.get("source", "Lecture document")
+        page = doc.metadata.get("page")
 
-        page = (
-            page_value + 1
-            if isinstance(page_value, int)
-            else None
-        )
+        if page is not None:
+            try:
+                page_label = int(page) + 1
+            except (TypeError, ValueError):
+                page_label = page
 
-        item = {
-            "page": page,
-            "source": doc.metadata.get("source", "unknown")
-        }
+            source_label = f"{os.path.basename(str(source))} - Page {page_label}"
+        else:
+            source_label = os.path.basename(str(source))
 
-        if item not in sources:
-            sources.append(item)
+        if source_label not in seen:
+            seen.add(source_label)
+            sources.append(source_label)
 
     return sources
 
 
-# ==========================================
-# Existing RAG Question Answering
-# ==========================================
+# =========================================================
+# 7. FOLLOW-UP QUESTION: RETRIEVAL-AUGMENTED GENERATION
+# =========================================================
 
 def sequential_rag(question):
+    """
+    Answer a student's follow-up question using relevant lecture chunks.
+
+    Returns:
+        original_question
+        rewritten_question
+        answer
+        sources
+    """
+    original_question = (question or "").strip()
+
+    if not original_question:
+        raise ValueError("Please enter a question.")
+
+    print("\n" + "=" * 50)
+    print("DOCUMIND AI: PROCESSING STUDENT QUESTION")
+    print("=" * 50)
+
+    # Step 1: Rewrite the question for better retrieval.
+    rewritten_question = rewrite_chain.invoke(
+        {"question": original_question}
+    ).strip()
+
+    if not rewritten_question:
+        rewritten_question = original_question
+
+    print("Original question:", original_question)
+    print("Search query:", rewritten_question)
+
+    # Step 2: Retrieve relevant lecture chunks.
     retriever = get_retriever()
-    original_question = question.strip()
+    docs = retriever.invoke(rewritten_question)
 
-    print("\n==============================")
-    print("ORIGINAL QUESTION")
-    print("==============================")
-    print(original_question)
+    if not docs:
+        return {
+            "original_question": original_question,
+            "rewritten_question": rewritten_question,
+            "answer": (
+                "I could not find relevant information in the uploaded "
+                "lecture. Please try rephrasing your question."
+            ),
+            "sources": [],
+        }
 
-    rewritten_question = rewrite_chain.invoke({
-        "question": original_question
-    }).strip()
-
-    print("\nREWRITTEN QUESTION:")
-    print(rewritten_question)
-
-    # Preserve the existing retrieval behavior.
-    docs = retriever.invoke(original_question)
-
-    print("\nRETRIEVED DOCUMENTS:", len(docs))
-
+    # Step 3: Format the retrieved context.
     context = format_docs(docs)
 
-    answer = answer_chain.invoke({
-        "context": context,
-        "question": original_question
-    })
+    if not context:
+        raise ValueError(
+            "The retrieved lecture sections contain no readable text."
+        )
 
-    sources = get_sources(docs)
+    # Step 4: Generate an answer grounded in the lecture.
+    answer = answer_chain.invoke(
+        {
+            "context": context,
+            "question": original_question,
+        }
+    ).strip()
 
-    return {
+    # Step 5: Return the answer and source references.
+    result = {
         "original_question": original_question,
         "rewritten_question": rewritten_question,
         "answer": answer,
-        "sources": sources
+        "sources": get_sources(docs),
     }
 
+    print("Retrieved chunks:", len(docs))
+    print("Answer length:", len(answer))
+    print("=" * 50)
 
-# ==========================================
-# Read Full Document
-# ==========================================
+    return result
+
+
+# =========================================================
+# 8. READ THE COMPLETE MARKDOWN DOCUMENT
+# =========================================================
 
 def read_document_content(markdown_path):
     """
-    Read the complete converted Markdown document.
-    Used for document-wide summaries and questions.
+    Read the Markdown file created from the uploaded PDF.
     """
+    if not markdown_path:
+        raise ValueError("The Markdown file path was not provided.")
+
+    if not os.path.isfile(markdown_path):
+        raise FileNotFoundError(
+            f"Lecture Markdown file was not found: {markdown_path}"
+        )
 
     with open(markdown_path, "r", encoding="utf-8") as file:
         content = file.read().strip()
 
     if not content:
-        raise ValueError("The document is empty.")
+        raise ValueError(
+            "The converted lecture is empty. Please upload a readable PDF."
+        )
+
+    print("\n" + "=" * 50)
+    print("READING LECTURE DOCUMENT")
+    print("File:", markdown_path)
+    print("Characters:", len(content))
+    print("=" * 50)
 
     return content
 
 
-# ==========================================
-# Split Long Documents
-# ==========================================
+# =========================================================
+# 9. SPLIT THE DOCUMENT INTO MANAGEABLE SECTIONS
+# =========================================================
 
 def split_document_content(
     content,
-    chunk_size=12000,
-    chunk_overlap=500
+    chunk_size=6000,
+    chunk_overlap=400,
 ):
     """
-    Split the full document into manageable sections
-    for processing by the language model.
-    """
+    Split the complete lecture into overlapping sections.
 
-    if chunk_overlap >= chunk_size:
+    Overlap helps preserve context between adjacent sections.
+    """
+    if not content or not content.strip():
+        raise ValueError("Cannot split an empty lecture document.")
+
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than zero.")
+
+    if chunk_overlap < 0 or chunk_overlap >= chunk_size:
         raise ValueError(
-            "chunk_overlap must be smaller than chunk_size."
+            "chunk_overlap must be non-negative and smaller than chunk_size."
         )
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        separators=["\n\n", "\n", ". ", " ", ""]
+        separators=[
+            "\n\n",
+            "\n",
+            ". ",
+            "? ",
+            "! ",
+            "; ",
+            " ",
+            "",
+        ],
+        length_function=len,
     )
 
-    return splitter.split_text(content)
+    sections = splitter.split_text(content)
+
+    sections = [
+        section.strip()
+        for section in sections
+        if section and section.strip()
+    ]
+
+    if not sections:
+        raise ValueError(
+            "No readable sections could be created from the lecture."
+        )
+
+    print("Total document sections:", len(sections))
+
+    for index, section in enumerate(sections, start=1):
+        print(
+            f"Section {index}: {len(section)} characters"
+        )
+
+    return sections
 
 
-# ==========================================
-# Generate Summary
-# ==========================================
+# =========================================================
+# 10. GENERATE A SUMMARY FOR THE WHOLE LECTURE
+# =========================================================
 
 def generate_summary(markdown_path):
     """
-    Summarize each section of the document and combine
-    the summaries into one coherent study summary.
-    """
+    Generate detailed notes for every section of the lecture.
 
+    Each section is processed separately, then the results are combined.
+    """
     content = read_document_content(markdown_path)
     sections = split_document_content(content)
 
-    section_summaries = []
+    summaries = []
+
+    print("\n" + "=" * 50)
+    print("GENERATING FULL LECTURE SUMMARY")
+    print("=" * 50)
 
     for index, section in enumerate(sections, start=1):
         print(
-            f"Generating summary for section "
-            f"{index}/{len(sections)}"
+            f"\nSummarizing section {index}/{len(sections)}..."
         )
 
-        section_summary = summary_chain.invoke({
-            "content": section
-        })
+        try:
+            section_summary = summary_chain.invoke(
+                {"context": section}
+            ).strip()
 
-        section_summaries.append(
-            f"Section {index} Summary:\n{section_summary}"
+            print(
+                f"Section {index} summary length: "
+                f"{len(section_summary)} characters"
+            )
+
+            if not section_summary:
+                raise ValueError(
+                    f"The model returned an empty summary for section {index}."
+                )
+
+            summaries.append(
+                f"## Part {index}\n\n{section_summary}"
+            )
+
+        except Exception as exc:
+            print(
+                f"SUMMARY ERROR in section {index}: {exc}"
+            )
+            raise
+
+    final_summary = "\n\n".join(summaries).strip()
+
+    if len(final_summary) < 50:
+        raise ValueError(
+            "The generated summary is unexpectedly short. "
+            "Please check the LLM response and configuration."
         )
 
-    combined_summaries = "\n\n".join(section_summaries)
+    print("\n" + "=" * 50)
+    print("SUMMARY GENERATION COMPLETED")
+    print("Sections processed:", len(sections))
+    print("Final summary length:", len(final_summary))
+    print("=" * 50)
 
-    final_summary_prompt = ChatPromptTemplate.from_template("""
-You are an expert academic editor.
-
-Combine the following section summaries into one coherent
-study summary for the original document.
-
-Rules:
-- Preserve important concepts and details.
-- Remove repeated information.
-- Organize the output with headings and bullet points.
-- Use the same language as the summaries.
-- Do not introduce facts that are not present in the summaries.
-- Focus on academic content.
-- Keep important definitions, steps, formulas, and examples.
-
-SECTION SUMMARIES:
-{summaries}
-
-Write the final study summary.
-""")
-
-    final_summary_chain = (
-        final_summary_prompt | llm | output_parser
-    )
-
-    return final_summary_chain.invoke({
-        "summaries": combined_summaries
-    })
+    return final_summary
 
 
-# ==========================================
-# Generate Important Questions
-# ==========================================
+# =========================================================
+# 11. GENERATE STUDY QUESTIONS FOR THE WHOLE LECTURE
+# =========================================================
 
 def generate_questions(markdown_path, summary=None):
     """
-    Generate academic questions from the entire document.
-    Process sections separately, then combine and deduplicate
-    the questions while preserving their answers.
-    """
+    Generate questions and answers from every section of the lecture.
 
+    The optional summary argument is retained for compatibility with
+    any existing code that might pass it.
+    """
     content = read_document_content(markdown_path)
     sections = split_document_content(content)
 
-    question_sets = []
+    all_questions = []
+
+    print("\n" + "=" * 50)
+    print("GENERATING QUESTIONS FOR THE FULL LECTURE")
+    print("=" * 50)
 
     for index, section in enumerate(sections, start=1):
         print(
-            f"Generating questions for section "
-            f"{index}/{len(sections)}"
+            f"\nGenerating questions for section "
+            f"{index}/{len(sections)}..."
         )
 
-        section_questions = questions_chain.invoke({
-            "content": section
-        })
+        try:
+            section_questions = questions_chain.invoke(
+                {"context": section}
+            ).strip()
 
-        question_sets.append(
-            f"Section {index} Questions:\n{section_questions}"
+            print(
+                f"Section {index} questions length: "
+                f"{len(section_questions)} characters"
+            )
+
+            if not section_questions:
+                raise ValueError(
+                    f"The model returned no questions for section {index}."
+                )
+
+            all_questions.append(
+                f"# Questions from Part {index}\n\n{section_questions}"
+            )
+
+        except Exception as exc:
+            print(
+                f"QUESTIONS ERROR in section {index}: {exc}"
+            )
+            raise
+
+    final_questions = "\n\n".join(all_questions).strip()
+
+    if not final_questions:
+        raise ValueError(
+            "No study questions were generated from the lecture."
         )
 
-    combined_questions = "\n\n".join(question_sets)
-
-    final_questions_prompt = ChatPromptTemplate.from_template("""
-You are an academic exam-question organizer.
-
-Organize and deduplicate candidate questions generated
-from different sections of the SAME lecture.
-
-CANDIDATE QUESTIONS:
-{questions}
-
-RULES:
-
-1. Keep questions about actual academic content.
-2. Remove questions about instructor names, professor names,
-   university names, cover pages, and administrative details.
-3. Remove duplicate and near-duplicate questions only.
-4. Preserve questions that test different concepts.
-5. Preserve answers, MCQ options, correct answers,
-   and explanations.
-6. Do not invent questions, facts, options, or answers.
-7. Aim for 15 to 20 distinct questions for a sufficiently
-   long lecture when the candidate questions support this.
-8. If fewer questions are supported, return fewer.
-9. Organize questions by topic when possible.
-10. Number all questions sequentially from 1.
-11. Keep the same language as the lecture.
-12. Return the complete final question set, not just a sample.
-13. Do not discard useful questions simply to shorten the output.
-14. Include answers for every question.
-
-FINAL QUESTIONS WITH ANSWERS:
-""")
-
-    final_questions_chain = (
-        final_questions_prompt | llm | output_parser
-    )
-
-    final_questions = final_questions_chain.invoke({
-        "questions": combined_questions
-    })
+    print("\n" + "=" * 50)
+    print("QUESTION GENERATION COMPLETED")
+    print("Sections processed:", len(sections))
+    print("Final questions length:", len(final_questions))
+    print("=" * 50)
 
     return final_questions

@@ -1,4 +1,3 @@
-
 import os
 import shutil
 
@@ -13,6 +12,10 @@ from config.config import VECTOR_DB_PATH
 UPLOAD_FOLDER = "data/documents"
 
 
+# ==========================================
+# Delete Old Files
+# ==========================================
+
 def delete_old_files():
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -26,9 +29,13 @@ def delete_old_files():
 def delete_old_vector_database():
     vector_db_folder = os.path.dirname(VECTOR_DB_PATH)
 
-    if os.path.exists(vector_db_folder):
+    if vector_db_folder and os.path.exists(vector_db_folder):
         shutil.rmtree(vector_db_folder)
 
+
+# ==========================================
+# Upload PDF
+# ==========================================
 
 def upload_pdf(file):
     if not file:
@@ -83,7 +90,7 @@ def upload_pdf(file):
 
         print("Markdown:", markdown_path)
 
-        # Build the existing FAISS database.
+        # Build the FAISS vector database.
         build_vector_database(markdown_path)
 
         print("\n==============================")
@@ -114,10 +121,14 @@ def upload_pdf(file):
         }
 
 
+# ==========================================
+# Generate Summary and Questions
+# ==========================================
+
 def generate_study_material():
     """
-    Generate a summary and questions from the latest
-    converted Markdown document.
+    Generate study notes and practice questions
+    from the latest converted Markdown document.
     """
 
     if not os.path.isdir(UPLOAD_FOLDER):
@@ -129,12 +140,15 @@ def generate_study_material():
         os.path.join(UPLOAD_FOLDER, filename)
         for filename in os.listdir(UPLOAD_FOLDER)
         if filename.lower().endswith(".md")
-        and os.path.isfile(os.path.join(UPLOAD_FOLDER, filename))
+        and os.path.isfile(
+            os.path.join(UPLOAD_FOLDER, filename)
+        )
     ]
 
     if not markdown_files:
         raise ValueError(
-            "No processed Markdown document was found. Please upload the PDF again."
+            "No processed Markdown document was found. "
+            "Please upload the PDF again."
         )
 
     # Use the most recently modified Markdown document.
@@ -148,10 +162,46 @@ def generate_study_material():
     print("==============================")
     print("Markdown:", markdown_path)
 
-    # Generate the summary and questions.
+    # --------------------------------------
+    # Generate Summary
+    # --------------------------------------
+
+    print("\nGenerating summary...")
+
     summary = generate_summary(markdown_path)
 
+    print("SUMMARY TYPE:", type(summary).__name__)
+    print("SUMMARY LENGTH:", len(summary) if summary else 0)
+
+    if not isinstance(summary, str) or not summary.strip():
+        raise RuntimeError(
+            "Summary generation returned empty or invalid content."
+        )
+
+    # --------------------------------------
+    # Generate Questions
+    # --------------------------------------
+
+    print("\nGenerating questions...")
+
     questions = generate_questions(markdown_path)
+
+    print("QUESTIONS TYPE:", type(questions).__name__)
+    print("QUESTIONS LENGTH:", len(questions) if questions else 0)
+
+    if not isinstance(questions, str) or not questions.strip():
+        raise RuntimeError(
+            "Question generation returned empty or invalid content."
+        )
+
+    # --------------------------------------
+    # Return Both Results
+    # --------------------------------------
+
+    print("\n==============================")
+    print("STUDY MATERIAL GENERATED")
+    print("==============================")
+    print("Summary and questions are both available.")
 
     return {
         "success": True,
@@ -159,6 +209,10 @@ def generate_study_material():
         "questions": questions
     }
 
+
+# ==========================================
+# Ask a Question
+# ==========================================
 
 def ask_question(question):
     from rag.chains import sequential_rag
